@@ -140,14 +140,28 @@ def Matching_Real(initialPossition,eigVals,eigVecs,mean,testImage):
     
     '''
     
-    b = np.zeros((1,80))
-    Tr = np.zeros((2,80/2))
-    
+    b = np.zeros((eigVecs.shape[1],1))
+    Tr = np.identity(2)
+    print("Matching-----------")
     error = 1000;
+    repetitions = 0;
     while error > 0.0001:
-        X = mean + np.dot(eigVecs,b)
-        Xx,Xy = split(X)
-        Xin = initialPossition + Tr*[Xx,Xy]
+        repetitions = repetitions +1;
+        print(repetitions)
+        #print(eigVecs.shape)
+        #print(b.shape)
+        #print(mean.shape)
+        #print(np.dot(eigVecs,b).shape)
+        X = np.add(mean, np.dot(eigVecs,b).T)
+        #print(X.shape)
+        
+        
+        Xx,Xy = split(X.T)
+        #print(Xx.shape)
+        print("here")
+        print(np.hstack((Xx,Xy)).T.shape)
+        
+        Xin = np.vstack((np.add(initialPossition[0],np.dot(Tr,np.hstack((Xx,Xy)).T)[0,:]),np.add(initialPossition[1],np.dot(Tr,np.hstack((Xx,Xy)).T)[1,:])))
         XinM = merge(Xin)
         Xrec = mahalanobisMatching(XinM,testImage)
         
@@ -607,7 +621,14 @@ if __name__ == '__main__':
         
     #print reader[::8,:]
     shape, A,error = rescale(readerP[::8,:]);
-#    [L,V,Am] = PCA(A,0.8)
+    [eigVals,eigVecs,mean] = PCA(A,0.98)
+    
+    
+    initialPossition = [1362,888]
+    
+    Matching_Real(initialPossition,eigVals,eigVecs,mean,training[0])
+    
+    
     
 #    model_learning(8,reader)
 
