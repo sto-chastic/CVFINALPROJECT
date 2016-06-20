@@ -70,9 +70,11 @@ def transform(A, T):
     '''
     Ax, Ay = split(A)
     Tx, Ty = split(T)
-
-    b2 = (np.dot(Ax, Ty)-np.dot(Ay, Tx))/np.power(np.dot(A, A),2)
-    a2 = np.dot(T, A)/np.power(np.dot(A, A),2)
+    #b2 = (np.dot(Ax, Ty)-np.dot(Ay, Tx))/np.power(np.dot(A, A),2)
+    #a2 = np.dot(T, A)/np.power(np.dot(A, A),2)
+    
+    b2 = (np.dot(Ax, Ty)-np.dot(Ay, Tx))/np.dot(A.T, A)
+    a2 = np.dot(T, A)/np.dot(A.T, A)
         
     alpha = np.arctan(b2/a2) #Optimal angle of rotation is found.
     Tr = np.array([[np.cos(alpha), -np.sin(alpha)], [np.sin(alpha), np.cos(alpha)]])
@@ -129,10 +131,26 @@ def PCA(X,Variation):
     Vii = Vi[:,index]
     Viii = Vii[:,:numEig]
     Liii = Li[:numEig]
-    for ii in range(0,numEig):
-        Viii[:,ii] = Viii[:,ii]/sum(Viii[:,ii])
-    print Viii.shape
-    return [Liii,Viii,Xm]
+    
+    VI = np.dot(Viii.T,Viii)
+    print(np.diagonal(VI))
+    print(Viii)
+    VV= Viii/np.diagonal(VI)
+    print("after")
+    print(VV)
+    
+    #for ii in range(0,Viii.shape[1]):
+    #    sumi = 0;
+    #    for kk in range(0,Viii.shape[0]):
+    #        sumi = Viii[kk,ii] + sumi;
+    #    print(sumi)
+    #    for jj in range(0,Viii.shape[0]):
+    #        Viii[jj,ii] = Viii[jj,ii]/sumi
+    #print Viii.shape
+    
+    #print(Viii[0])
+    print("Eigs on top")
+    return [Liii,VV,Xm]
     
 def Matching_Real(initialPossition,eigVals,eigVecs,mean,testImage):
     '''We do the PCA and the model "creation" using the form [X1,Y1,X2,Y2...], not sepparated
@@ -141,39 +159,65 @@ def Matching_Real(initialPossition,eigVals,eigVecs,mean,testImage):
     '''
     
     b = np.zeros((eigVecs.shape[1],1))
+    
     Tr = np.identity(2)
     print("Matching-----------")
     error = 1000;
     repetitions = 0;
-    while error > 0.0001:
+    while repetitions<3:#error > 0.0001:
         repetitions = repetitions +1;
         print(repetitions)
-        #print(eigVecs.shape)
-        #print(b.shape)
-        #print(mean.shape)
-        #print(np.dot(eigVecs,b).shape)
+        
         X = np.add(mean, np.dot(eigVecs,b).T)
-        #print(X.shape)
-        
-        
-        Xx,Xy = split(X.T)
-        #print(Xx.shape)
-        print("here")
-        print(np.hstack((Xx,Xy)).T.shape)
-        
-        Xin = np.vstack((np.add(initialPossition[0],np.dot(Tr,np.hstack((Xx,Xy)).T)[0,:]),np.add(initialPossition[1],np.dot(Tr,np.hstack((Xx,Xy)).T)[1,:])))
-        XinM = merge(Xin)
-        Xrec = mahalanobisMatching(XinM,testImage)
-        
-        initialPossition = np.mean(split(Xrec)-Xin, axis=0)
-        s, a, Tr, xFin = transform(X, split(Xrec))
-        Tinv = np.linalg.pinv(Tr+initialPossition)
-        y = Tinv*split(Xrec)
-        yp = y/(np.dot(y,split(mean)))
-        
-        b = np.dot(eigVecs.T,(merge(yp)-mean))
-        error = np.linalg.norm(X - mean + np.dot(eigVecs,b))#not calculated on the right place, but might work, should be on the image space
     
+        Xx,Xy = split(X.T)
+   
+        Xin = np.vstack((np.add(initialPossition[0],np.dot(Tr,np.hstack((Xx,Xy)).T)[0,:]),np.add(initialPossition[1],np.dot(Tr,np.hstack((Xx,Xy)).T)[1,:])))
+        
+        tes = testImage.reshape(height,width)
+        test = tes.copy()
+        #for i in range(40):
+        #    test[Xin[1,i],Xin[0,i]]=255;
+        
+        
+        XinM = merge(Xin)
+        Xrec = mahalanobisMatching(XinM.T,testImage)
+        #print("here")
+        #print(Xrec)
+        
+        
+        #for i in range(40):
+            #test[Xrec[i*2+1],Xrec[i*2]]=255;
+        
+        #cv2.imshow('test', test.astype(np.uint8));
+        #cv2.waitKey(0);
+        
+        initialPossition = np.mean(split(Xrec)-Xin, axis=1)
+        print("XinM[0]")
+        print(XinM[0])
+        print("Xrec")
+        print(Xrec)
+        s, a, Tr, xFin = transform(XinM[0], Xrec)
+        
+        print(Tr)
+        print(s)
+        
+        Tinv = np.linalg.inv(Tr)
+        print("here")
+        print(Tinv)
+        y = np.dot(Tinv,np.vstack((np.subtract(np.vstack((split(Xrec)))[0],initialPossition[0]),np.subtract(np.vstack(split(Xrec))[0],initialPossition[0]))))
+        
+        
+        
+        yp = y/(np.dot(merge(y),mean))
+       
+        
+        b = np.dot(eigVecs.T,(merge(yp)-mean).T)
+        
+        error = np.linalg.norm(X - mean + np.dot(eigVecs,b))#not calculated on the right place, but might work, should be on the image space
+        
+    
+    cv2.destroyAllWindows()
     return
     
 def model_learning(t_size,data):
