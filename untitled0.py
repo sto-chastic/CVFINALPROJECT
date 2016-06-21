@@ -44,8 +44,11 @@ def rescale(A):
         scale = np.sqrt(np.sum(np.square(mean)));
         mean[:] = mean /scale;
         error = np.linalg.norm(mean-old);
-        print j
-        print error
+        #print j
+        #print error
+        
+    mean = mean*scale;
+        
     return mean,A,error
 
 
@@ -120,8 +123,8 @@ def PCA(X,Variation):
     varSum = 0;
     for numEig in range(0,ne):
         varSum = varSum + np.absolute(Li[numEig])
-        print varSum
-        print varTot
+        #print varSum
+        #print varTot
         if varSum/varTot >= Variation:
             print 'Number of Eigenvectors after PCA ='
             print numEig
@@ -133,11 +136,14 @@ def PCA(X,Variation):
     Liii = Li[:numEig]
     
     VI = np.dot(Viii.T,Viii)
-    print(np.diagonal(VI))
+    #print(np.diagonal(VI))
     print(Viii)
-    VV= Viii/np.diagonal(VI)
+    VV= np.divide(Viii,np.sqrt(np.diagonal(VI)))
     print("after")
     print(VV)
+    
+    print("pca norm")
+    print(np.sum(VV, axis=0))
     
     #for ii in range(0,Viii.shape[1]):
     #    sumi = 0;
@@ -169,7 +175,7 @@ def Matching_Real(initialPossition,eigVals,eigVecs,mean,testImage):
         print(repetitions)
         
         X = np.add(mean, np.dot(eigVecs,b).T)
-    
+        
         Xx,Xy = split(X.T)
    
         Xin = np.vstack((np.add(initialPossition[0],np.dot(Tr,np.hstack((Xx,Xy)).T)[0,:]),np.add(initialPossition[1],np.dot(Tr,np.hstack((Xx,Xy)).T)[1,:])))
@@ -181,9 +187,9 @@ def Matching_Real(initialPossition,eigVals,eigVecs,mean,testImage):
         
         
         XinM = merge(Xin)
+        print(XinM)
         Xrec = mahalanobisMatching(XinM.T,testImage)
-        #print("here")
-        #print(Xrec)
+
         
         
         #for i in range(40):
@@ -193,27 +199,26 @@ def Matching_Real(initialPossition,eigVals,eigVecs,mean,testImage):
         #cv2.waitKey(0);
         
         initialPossition = np.mean(split(Xrec)-Xin, axis=1)
-        print("XinM[0]")
-        print(XinM[0])
-        print("Xrec")
-        print(Xrec)
+
         s, a, Tr, xFin = transform(XinM[0], Xrec)
         
-        print(Tr)
-        print(s)
-        
+
         Tinv = np.linalg.inv(Tr)
-        print("here")
-        print(Tinv)
-        y = np.dot(Tinv,np.vstack((np.subtract(np.vstack((split(Xrec)))[0],initialPossition[0]),np.subtract(np.vstack(split(Xrec))[0],initialPossition[0]))))
+
+        y = np.dot(Tinv,np.vstack((np.subtract(np.vstack((split(Xrec)))[0],initialPossition[0]),np.subtract(np.vstack(split(Xrec))[1],initialPossition[1]))))
         
+        print(merge(y))
         
+        print(eigVals)       
         
-        yp = y/(np.dot(merge(y),mean))
-       
-        
-        b = np.dot(eigVecs.T,(merge(yp)-mean).T)
-        
+        bn = np.dot(eigVecs.T,np.subtract(merge(y),mean).T)
+        for i in range(bn.shape[0]):
+            if bn[i] >= 3*np.sqrt(eigVals[i]):
+                b[i] = 3*np.sqrt(eigVals[i])
+            elif bn[i] <= -3*np.sqrt(eigVals[i]):
+                b[i] = -3*np.sqrt(eigVals[i])
+            else:
+                b[i] = bn[i]
         error = np.linalg.norm(X - mean + np.dot(eigVecs,b))#not calculated on the right place, but might work, should be on the image space
         
     
