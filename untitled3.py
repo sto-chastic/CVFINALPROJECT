@@ -7,7 +7,6 @@ Created on Fri Apr 22 15:52:04 2016
 
 import csv
 import cv2
-import cv2.cv as cv
 import numpy as np
 from numpy import linalg as LA
 import fnmatch
@@ -21,11 +20,11 @@ def rescale(A):
     mean = A[0,:];#Assign the first image as the MEAN image
     error = 10;
     
-    old = np.zeros((1,80))
+    old = np.zeros((1,numberOfPoints))
     j=0
+    scale1 = np.sqrt(np.sum(np.square(mean)))
     while error>0.00001:
         scale = np.sqrt(np.sum(np.square(mean)))
-        
         A = np.divide(A,scale)
         mean = np.divide(mean,scale)
         old[:] = mean[:];
@@ -47,8 +46,8 @@ def rescale(A):
         #print j
         #print error
         
-    mean = mean*scale;
-        
+    mean = mean*scale1;
+    
     return mean,A,error
 
 
@@ -137,13 +136,13 @@ def PCA(X,Variation):
     
     VI = np.dot(Viii.T,Viii)
     #print(np.diagonal(VI))
-    print(Viii)
+    #print(Viii)
     VV= np.divide(Viii,np.sqrt(np.diagonal(VI)))
-    print("after")
-    print(VV)
+   # print("after")
+    #print(VV)
     
-    print("pca norm")
-    print(np.sum(VV, axis=0))
+    #print("pca norm")
+   # print(np.sum(VV, axis=0))
     
     #for ii in range(0,Viii.shape[1]):
     #    sumi = 0;
@@ -158,12 +157,63 @@ def PCA(X,Variation):
     print("Eigs on top")
     return [Liii,VV,Xm]
     
-def gaussian_Matching (eigVals,eigVecs,mean,testImage):
-    return
+def pyramid(initialPossition,eigVals,eigVecs,mean,testImage,training):
+        
+        testImage=testImage.reshape(height,width)
+        lowerRes2 = cv2.pyrDown(testImage)        
+        lowerRes3 = cv2.pyrDown(lowerRes2)
+        
+        #mean2 = np.divide(mean,2)
+        mean3 = np.divide(mean,4)
+        reader2 = np.divide(reader,2)
+        reader3 = np.divide(reader2,2)
+        #plt.plot(mean[::2],mean[1::2])
+        #plt.plot(mean3[::2],mean3[1::2])
+        #plt.show()
+        x = initialPossition[0]/4
+        y = initialPossition[1]/4      
+        test = lowerRes3.copy()
+        for i in range(numberOfPoints/2):
+
+            test[mean3[i*2+1]+y,mean3[i*2]+x]=255;
+        
+        cv2.imshow('test', test.astype(np.uint8));
+        cv2.waitKey(0);
+        cv2.destroyAllWindows();
+        
+        he,wi = testImage.shape
+        
+        readerTemp = reader
+        
+        train2,he2,wi2 = down(training,he,wi)
+        train3,he3,wi3 = down(train2,he2,wi2)
+        global reader
+        reader = reader3
+        
+        
+        X3, initialPossition = Matching_Real(train3,np.divide(initialPossition,4),eigVals,eigVecs,mean3,lowerRes3,he3,wi3)
+        reader = reader2
+        print(np.mean(np.vstack((split(X3[0]))), axis = 1))
+        #np.add(np.hstack((split(X.T))),initialPossition)
+        X2, initialPossition = Matching_Real(train2,initialPossition*2,eigVals,eigVecs,np.multiply(X3,2),lowerRes2,he2,wi2)
+        reader = readerTemp
+        X1 = Matching_Real(training,initialPossition*2,eigVals,eigVecs,np.multiply(X2,2),testImage,he,wi)
+        
+        return mean3   
+
+def down(train,he,wi) :
+    img = train[0].reshape(he,wi)
+    hep,wip = cv2.pyrDown(img).shape
+    output = np.zeros((trainN,hep*wip))
+    for i,row in enumerate(train):
+        img = row.reshape(he,wi)
+        cv2.pyrDown(img).reshape(1,hep*wip)  
+        output[i] = cv2.pyrDown(img).reshape(1,hep*wip)  
+        
     
+    return output,hep,wip
     
-    
-def Matching_Real(initialPossition,eigVals,eigVecs,mean,testImage):
+def Matching_Real(train,initialPossition,eigVals,eigVecs,mean,testImage,he,wi):
     '''We do the PCA and the model "creation" using the form [X1,Y1,X2,Y2...], not sepparated
     initialPossition = Initial Possition for the model as [Xt,Yt]
     
@@ -175,46 +225,40 @@ def Matching_Real(initialPossition,eigVals,eigVecs,mean,testImage):
     print("Matching-----------")
     error = 1000;
     repetitions = 0;
-    while repetitions<3:#error > 0.0001:
+    while repetitions<8:#error > 0.0001:
         repetitions = repetitions +1;
         print(repetitions)
         
         X = np.add(mean, np.dot(eigVecs,b).T)
-        
-        Xx,Xy = split(X.T)
-   
-        Xin = np.vstack((np.add(initialPossition[0],np.dot(Tr,np.hstack((Xx,Xy)).T)[0,:]),np.add(initialPossition[1],np.dot(Tr,np.hstack((Xx,Xy)).T)[1,:])))
-        
-        tes = testImage.reshape(height,width)
-        test = tes.copy()
+        #print(split(X.T))
+        #print(np.hstack((split(X.T))).T)
+        #print(initialPossition.shape)
+        Xin = np.add(np.hstack((split(X.T))),initialPossition)
+        #tes = testImage.reshape(height,width)
+        #test = tes.copy()
         #for i in range(40):
         #    test[Xin[1,i],Xin[0,i]]=255;
-        
-        
-        XinM = merge(Xin)
-        print(XinM)
-        Xrec = mahalanobisMatching(XinM.T,testImage)
+             
+        XinM = merge(Xin.T)
 
-        
-        
-        #for i in range(40):
-            #test[Xrec[i*2+1],Xrec[i*2]]=255;
-        
-        #cv2.imshow('test', test.astype(np.uint8));
-        #cv2.waitKey(0);
-        
-        initialPossition = np.mean(split(Xrec)-Xin, axis=1)
+        Xrec = mahalanobisMatching(train,XinM.T,testImage,he,wi)
 
-        s, a, Tr, xFin = transform(XinM[0], Xrec)
+        XT = np.vstack((split(Xrec)))
+        XI = np.vstack((split(X[0])))
+        meanT = np.mean(XT,axis=1)
+        meanI = np.mean(XI,axis=1)
+        initialPossition = np.subtract(meanT, meanI )
+        print initialPossition
+        s, a, Tr, xFin = transform(np.subtract(XinM[0],np.mean(XinM[0])), np.subtract(Xrec,np.mean(Xrec)))
         
 
         Tinv = np.linalg.inv(Tr)
 
         y = np.dot(Tinv,np.vstack((np.subtract(np.vstack((split(Xrec)))[0],initialPossition[0]),np.subtract(np.vstack(split(Xrec))[1],initialPossition[1]))))
         
-        print(merge(y))
+        #print(merge(y))
         
-        print(eigVals)       
+        #print(eigVals)       
         
         bn = np.dot(eigVecs.T,np.subtract(merge(y),mean).T)
         for i in range(bn.shape[0]):
@@ -224,19 +268,38 @@ def Matching_Real(initialPossition,eigVals,eigVecs,mean,testImage):
                 b[i] = -3*np.sqrt(eigVals[i])
             else:
                 b[i] = bn[i]
-        error = np.linalg.norm(X - mean + np.dot(eigVecs,b))#not calculated on the right place, but might work, should be on the image space
+        test = testImage.copy();
+        temp = np.add(mean, np.dot(eigVecs,b).T)
+        print b
+        x = initialPossition[0]
+        y = initialPossition[1]   
+#        print test.shape
+#        print temp.shape
+        for i in range(numberOfPoints/2):
+            test[temp[0,i*2+1]+y,temp[0,i*2]+x]=255;
         
+        cv2.imshow('test', test.astype(np.uint8));
+        cv2.waitKey(0);
+        cv2.destroyAllWindows();
+        
+        error = np.linalg.norm(X - mean - np.dot(eigVecs,b))#not calculated on the right place, but might work, should be on the image space
+        print error
+    P = np.add(mean, np.dot(eigVecs,b).T)
+    P1 = split(np.add(mean, np.dot(eigVecs,b).T)[0])
+    P2 = np.vstack(P1)
+    #Xf = np.add(np.dot(Tr,P2) , np.vstack(initialPossition))    
+    Xf = merge(np.dot(Tr,P2))
     
     cv2.destroyAllWindows()
-    return
+    return Xf, initialPossition
     
 def model_learning(t_size,data):
     
     # split dataset in Target and Training set
     # Do it for all 
     [c,r] = data.shape
-    target = np.zeros((t_size, 80))
-    training = np.zeros((c-t_size, 80))
+    target = np.zeros((t_size, numberOfPoints))
+    training = np.zeros((c-t_size, numberOfPoints))
     for i in range(c/t_size):
         start = i*t_size
         stop =  i+t_size
@@ -448,33 +511,31 @@ def image_fit(img, s_model, i_model,  l):
             dist = mahalanobis(X, g)
     return T, s,a 
 
-def extract_Features(A,n,imgR):
+def extract_Features(A,n,imgR,he,wi):
     """A should only be one vector, e.g. reader[0]
         n is the profile size, number of pixels in the lines
         imgR is the corresponding image to extract features in vector form.
-        NOTE, for some reason we have 80 points, but we only obtain 40 vectors displayed in the image."""
+        NOTE, for some reason we have numberOfPoints points, but we only obtain 40 vectors displayed in the image."""
    
 #    sobelx = cv2.Sobel(img,cv2.CV_64F,1,0,ksize=5) 
 #    sobely = cv2.Sobel(img,cv2.CV_64F,0,1,ksize=5)
-
-    img = imgR.reshape(height,width);
+    img = imgR.reshape(he,wi);
 
     #img = cv2.imread("Project_Data/_Data/Radiographs/01.tif",0)
     #cv2.imshow('test', img);
     #img = cv2.imread("C:\\Users\\David\\Google Drive\\KULeuven\\Computer vision\\Nieuwe map\\_Data\\Radiographs\\01.tif",0);
-    np.linspace(0,80,41)
+    np.linspace(0,numberOfPoints,41)
     #n=50;
-    vec = np.zeros((40*2,(2*n+1)));
-    vecExtr = np.zeros(((vec.shape[1]),40));
-    for j in range(40):
-        x1= A[np.mod(j*2-2,80)];
-        y1 = A[np.mod(j*2-1, 80)];
-        x2 = A[np.mod(j*2,80)];
-        y2 = A[np.mod(j*2+1,80)];
-        x3 = A[np.mod(j*2+2,80)];
-        y3 = A[np.mod(j*2+3,80)];
-        
-        
+    vec = np.zeros((numberOfPoints,(2*n+1)));
+    vecExtr = np.zeros(((vec.shape[1]),numberOfPoints/2));
+
+    for j in range(numberOfPoints/2):
+        x1=  A[np.mod(j*2-2,numberOfPoints)];
+        y1 = A[np.mod(j*2-1, numberOfPoints)];
+        x2 = A[np.mod(j*2,numberOfPoints)];
+        y2 = A[np.mod(j*2+1,numberOfPoints)];
+        x3 = A[np.mod(j*2+2,numberOfPoints)];
+        y3 = A[np.mod(j*2+3,numberOfPoints)];
         
         dx = x3-x1;
         dy = y3-y1;
@@ -492,7 +553,6 @@ def extract_Features(A,n,imgR):
         nx = -dy;
         ny = dx;
         length = np.linspace(-n,n,2*n+1);
-
         vec[2*j,:] = x + length * nx;
         vec[2*j+1,:] = y + length * ny;
         for i in length:
@@ -503,24 +563,37 @@ def extract_Features(A,n,imgR):
 #    cv2.destroyAllWindows()
     return vec,vecExtr
             
-def distribution_Training(train,profileSize):
+def distribution_Training(train,profileSize,he,wi):
     
-    vec,_ = extract_Features(reader[0],profileSize,train[0]);
+    vec,_ = extract_Features(reader[0],profileSize,train[0],he,wi);
     A = np.zeros((train.shape[0],vec.shape[1]*vec.shape[0]/2))
     for i in range(train.shape[0]):
-        #vecExtr = np.zeros(((vec.shape[1]),80));
-        img = train[i,:].reshape(height,width);
-        lapl = cv2.Laplacian(img,cv2.CV_64F,ksize=3);
-        vec,vecExtrP = extract_Features(reader[i*8],profileSize,lapl);
+        #vecExtr = np.zeros(((vec.shape[1]),numberOfPoints));
+        img = train[i,:].reshape(he,wi);
+        #img = cv2.equalizeHist(img)
+        sobelx = cv2.Sobel(img,cv2.CV_64F,1,0,ksize=3)
+        sobely = cv2.Sobel(img,cv2.CV_64F,0,1,ksize=3)
+#        sobelx_8u = np.power(sobelx,2)
+#        sobely_8u = np.power(sobely,2)
+#        lapl=np.uint8(np.sqrt(sobelx_8u+sobely_8u));
+        
+        sobelx_8u = np.abs(sobelx)
+        sobely_8u = np.abs(sobely)
+        lapl=np.uint8(sobelx_8u+sobely_8u);
+
+        
+#        lapl = cv2.Laplacian(img,cv2.CV_64F,ksize=3);
+
+        vec,vecExtrP = extract_Features(reader[i*8],profileSize,lapl,he,wi);
 #        cv2.imshow('test', lapl.astype(np.uint8));
 #        cv2.waitKey(0);
 #        cv2.destroyAllWindows()
 #        print(np.sum(vec))
-#        for j in range(80):
+#        for j in range(numberOfPoints):
 #            for k in range(vec.shape[1]):
 #                vecExtr[k,j] = lapl[vec[2*j,k],vec[2*j+1,k]];
         for l in range(vecExtrP.shape[1]):
-            A[i,vecExtrP.shape[0]*l:vecExtrP.shape[0]*(l+1)] = vecExtrP[:,l];
+            A[i,vecExtrP.shape[0]*l:vecExtrP.shape[0]*(l+1)] = vecExtrP[:,l]/np.sum(np.abs(vecExtrP[:,l]));
             
 #    print(vecExtrP.shape[0])
 #    print(A.shape)
@@ -528,7 +601,7 @@ def distribution_Training(train,profileSize):
 
 
     
-def mahalanobisMatching(testModel,testImage):
+def mahalanobisMatching(train,testModel,testImage,he,wi):
     '''
     Calculates the best point locations based on mahalanobis distance.
     @param testModel: Test shape
@@ -540,14 +613,27 @@ def mahalanobisMatching(testModel,testImage):
     profileSize = 10
     comparedProfileSize = 5
     
-    sampledProfile = distribution_Training(training,comparedProfileSize)
-    #print(sampledProfile.shape)
-    lapl = cv2.Laplacian(testImage,cv2.CV_64F,ksize=3);
-    vec,vecExtrP = extract_Features(testModel,profileSize,lapl)
+    sampledProfile = distribution_Training(train,comparedProfileSize,he,wi)
+    img = testImage
+    #img = cv2.equalizeHist(img)
+    sobelx = cv2.Sobel(img,cv2.CV_64F,1,0,ksize=3)
+    sobely = cv2.Sobel(img,cv2.CV_64F,0,1,ksize=3)
+#    sobelx_8u = np.power(sobelx,2)
+#    sobely_8u = np.power(sobely,2)
+#    lapl=np.uint8(np.sqrt(sobelx_8u+sobely_8u));
+        
+    sobelx_8u = np.abs(sobelx)
+    sobely_8u = np.abs(sobely)
+    lapl=np.uint8(sobelx_8u+sobely_8u);
+
+        
+#    lapl = cv2.Laplacian(img,cv2.CV_64F,ksize=3);
+    
+    vec,vecExtrP = extract_Features(testModel,profileSize,lapl,he,wi)
     subProfile = np.zeros((sampledProfile.shape[0],(2*comparedProfileSize+1)))
     #print(subProfile.shape)
-    newPointCoords = np.zeros((40*2))
-    for k in range(40):
+    newPointCoords = np.zeros((numberOfPoints))
+    for k in range(numberOfPoints/2):
         subProfile = sampledProfile[:,k:k+(2*comparedProfileSize+1)]
         #print(subProfile.shape)
         index = 0;
@@ -604,11 +690,11 @@ def test_profile_grad( A):
     
 #    sobelx = cv2.Sobel(img,cv2.CV_64F,1,0,ksize=5) 
 #    sobely = cv2.Sobel(img,cv2.CV_64F,0,1,ksize=5)
-    for j in range(80):
-        x1 = A[0,np.mod(j*2, 80)]
-        y1= A[0,np.mod(j*2+1,80)];
-        x2 = A[0,np.mod(j*2+2,80)];
-        y2 = A[0,np.mod(j*2+3,80)];
+    for j in range(numberOfPoints):
+        x1 = A[0,np.mod(j*2, numberOfPoints)]
+        y1= A[0,np.mod(j*2+1,numberOfPoints)];
+        x2 = A[0,np.mod(j*2+2,numberOfPoints)];
+        y2 = A[0,np.mod(j*2+3,numberOfPoints)];
         
         #print x1, y1, x2,y2;
         
@@ -631,39 +717,50 @@ def multi_resol(img, A):
         L=L-1;
     return T,s,a
 
+def combine4Landmarks(ini,fin,vect):
+    comb = vect[ini::8,:]
+    for i in range(ini+1,fin):
+        comb = np.hstack((comb,vect[i::8,:]))
+    
+    return comb
+
 if __name__ == '__main__':
     
     global height 
     height = 1400;
     global width 
     width = 2870;
+    global trainN
+    trainN = 14;
+    global reader
+    reader = np.zeros([112,80]);
+    global numberOfPoints
+    numberOfPoints = 320
     
-    reader = np.zeros([112,80])
     readerP = np.zeros([112,80])
     i=0;
-    #directory = "C:\Users\David\Google Drive\KULeuven\Computer vision\Nieuwe map\\_Data/Landmarks/original/"
+    #directory = "C:\Users\David\Google Drive\KULeuven\Computer vision\Nieuwe map\\_Data/"
     directory = "Project_Data/_Data/"
     for filename in fnmatch.filter(os.listdir(directory + "Landmarks/original/"),'*.txt'):
-        #print(filename)
         reader[i,:] = np.loadtxt(open(directory+ "Landmarks/original/"+filename,"rb"),delimiter=",",skiprows=0)
         reader[i,::2]  = reader[i,::2]-60 #-np.mean(reader[i,::2]);#Zero-mean of the X axis
         reader[i,1::2] = reader[i,1::2]-100#-np.mean(reader[i,1::2]);#Zero-mean of the Y axis
         
-        readerP[i,:] = reader[i,:];
-        readerP[i,::2]  = reader[i,::2]-np.mean(reader[i,::2]);#Zero-mean of the X axis
-        readerP[i,1::2] = reader[i,1::2]-np.mean(reader[i,1::2]);#Zero-mean of the Y axis
+        #readerP[i,:] = reader[i,:];
+        #readerP[i,::2]  = reader[i,::2]-np.mean(reader[i,::2]);#Zero-mean of the X axis
+        #readerP[i,1::2] = reader[i,1::2]-np.mean(reader[i,1::2]);#Zero-mean of the Y axis
         
         i+=1;
         
+    
     vSize = height*width;
     training = np.zeros((14,vSize))#, dtype=np.int)
     i = 0;
     for filename in fnmatch.filter(os.listdir(directory + "Radiographs/"),'*.tif'):
         img = cv2.imread(directory + "Radiographs/" + filename,0)
-        #print(filename)
+        
         img2 = img.copy()
-        cv2.rectangle(img2, (60,100), (2930, 1500), (0, 255, 0), 2)
-        result = cv.GetSubRect(cv.fromarray(img2), (60, 100, int(2930-60),int(1500-100)))
+        result = img2[100:1500,60:2930]
         result = np.asarray(result)
 
         imgT = np.zeros((1,vSize), dtype=np.int)
@@ -672,17 +769,22 @@ if __name__ == '__main__':
 #        break;
         i+=1;
         
+    readerP = combine4Landmarks(0,4,reader)
+    readerP[:,::2]  = readerP[:,::2]-np.mean(readerP[:,::2]);#Zero-mean of the X axis
+    readerP[:,1::2] = readerP[:,1::2]-np.mean(readerP[:,1::2]);#Zero-mean of the Y axis
     
-        
-    #print reader[::8,:]
-    #shape, A,error = rescale(readerP[::8,:]);
-    #[eigVals,eigVecs,mean] = PCA(A,0.98)
+    shape, A,error = rescale(readerP);
+
+    #shape, A,error = rescale(combine4Landmarks(0,4,readerP));
+    #plt.plot(reader[0,::2],reader[0,1::2])
+    plt.plot(shape[::2],shape[1::2])
+    plt.show()
+    [eigVals,eigVecs,mean] = PCA(A,0.98)
     
-    
-    #initialPossition = [1362,888]
-    
-    #Matching_Real(initialPossition,eigVals,eigVecs,mean,training[0])
-    
+    initialPossition = np.mean(split(combine4Landmarks(0,4,reader)[0]),axis=1)
+    print('mean')
+    print(initialPossition)
+    pyramid(initialPossition,eigVals,eigVecs,shape,training[0],training)
     
     
 #    model_learning(8,reader)
@@ -703,6 +805,4 @@ if __name__ == '__main__':
 
 
     
-#    plt.plot(reader[0,::2],reader[0,1::2])
-#   plt.plot(shape[::2],shape[1::2])
-#   plt.show()
+
